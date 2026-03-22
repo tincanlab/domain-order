@@ -1,0 +1,114 @@
+version: "0.1"
+domain: "order"
+domain_id: "order"
+domain_name: "Order Domain"
+description: "Order domain manages BOPIS order lifecycle from placement through pickup completion. Handles order status tracking, customer queries, and order cancellations."
+
+owner:
+  name: "Zhong"
+  role: "Technical Lead"
+  team: "Engineering"
+
+components:
+  - id: "comp-order-management"
+    name: "Order Management Service"
+    description: "Manages BOPIS order lifecycle including creation, status updates, cancellation, and customer queries. Integrates with HCL Commerce for order processing."
+    type: "stateful"
+    external_dependencies:
+      - name: "HCL Commerce Platform"
+        purpose: "Order creation, customer data"
+        protocol: "REST"
+        availability_sla: "95.0%"
+    provided_interfaces:
+      - "ifc-order-management-api"
+      - "ifc-order-status-api"
+      - "ifc-order-status-event"
+    consumed_interfaces:
+      - "ifc-product-catalog-api"
+      - "ifc-inventory-management-api"
+      - "ifc-notification-api"
+      - "ifc-pickup-event"
+    dependencies:
+      - interface_id: "ifc-inventory-management-api"
+        owner_domain: "inventory"
+        required_before: "implementation"
+        component_id: "comp-inventory-management"
+      - interface_id: "ifc-product-catalog-api"
+        owner_domain: "ecommerce"
+        required_before: "implementation"
+        component_id: "comp-ecommerce-catalog"
+    nfr_slo:
+      availability: "99.5%"
+      latency_p95_ms: 200
+      throughput_rps: 300
+      error_budget: "0.5%"
+    data_entities:
+      - "BOPIS Order"
+      - "Order Line Item"
+      - "Customer"
+    observability:
+      metrics:
+        - "order_creation_latency"
+        - "order_status_update_latency"
+        - "cancellation_error_rate"
+      logs:
+        - "Order creation logs"
+        - "Status transition logs"
+        - "Cancellation logs"
+      traces:
+        - "Order creation traces"
+        - "Inventory reservation traces"
+    deployment:
+      replicas: 3
+      resource_limits:
+        cpu: "2 vCPU"
+        memory: "4Gi"
+        storage: "20Gi"
+      environment: "production"
+    security:
+      authentication: "JWT"
+      authorization: "Role-based (Customer, Associate, Admin)"
+      data_encryption: "TLS 1.3 in transit, AES-256 at rest"
+      compliance: "PCI DSS, GDPR, CCPA"
+    scaling:
+      min_replicas: 2
+      max_replicas: 10
+      auto_scaling_trigger: "CPU > 70% for 5 minutes"
+
+integration_patterns:
+  - pattern: "atomic_transaction"
+    source: "ecommerce, customer"
+    target: "order"
+    interface: "ifc-order-management-api"
+    resiliency:
+      retries: 2
+      timeout: "5000ms"
+      transaction: "distributed_transaction"
+    data_contract:
+      version: "0.1.0"
+      consistency: "strong"
+  - pattern: "async_event"
+    source: "order"
+    target: "party-role, notification"
+    interface: "ifc-order-status-event"
+    resiliency:
+      retries: 3
+      backoff: "exponential"
+      dead_letter_queue: true
+    data_contract:
+      version: "0.1.0"
+      backward_compatible: true
+
+external_integrations:
+  - system: "HCL Commerce Platform"
+    purpose: "Order creation and processing"
+    protocol: "REST"
+    auth: "API_KEY"
+    rate_limit: "300 rps"
+    timeout: "5000ms"
+    circuit_breaker: true
+    notes: "HCL Commerce handles order creation and payment processing"
+
+open_questions: []
+
+notes: "Order domain is the core of BOPIS flow and requires high availability and data consistency. Event-driven status updates enable real-time customer and associate visibility."

@@ -1,0 +1,59 @@
+version: "0.1"
+
+workflows:
+  - id: "wf-order-lifecycle"
+    name: "Order lifecycle"
+    type: "state_machine"
+    states:
+      - name: "RECEIVED"
+        transitions:
+          - target: "RESERVED"
+            trigger: "inventory reservation confirmed"
+            action: "persist order and reservation"
+      - name: "RESERVED"
+        transitions:
+          - target: "CONFIRMED"
+            trigger: "order accepted"
+            action: "confirm order"
+          - target: "CANCELLED"
+            trigger: "customer cancel"
+            action: "release inventory reservation"
+      - name: "CONFIRMED"
+        transitions:
+          - target: "READY_FOR_PICKUP"
+            trigger: "fulfillment complete"
+            action: "emit ready-for-pickup status"
+          - target: "CANCELLED"
+            trigger: "store cancel"
+            action: "notify customer and release reservation"
+      - name: "READY_FOR_PICKUP"
+        transitions:
+          - target: "PICKED_UP"
+            trigger: "pickup verified"
+            action: "finalize order"
+      - name: "PICKED_UP"
+        transitions: []
+      - name: "CANCELLED"
+        transitions: []
+    compensating_actions:
+      - step: "reserve inventory"
+        compensation: "release inventory"
+      - step: "ready for pickup"
+        compensation: "re-notify customer or hold for recheck"
+  - id: "wf-pickup-verification"
+    name: "Pickup verification"
+    type: "pipeline"
+    states:
+      - name: "verify_qr"
+        transitions:
+          - target: "validate_order"
+            trigger: "qr scanned"
+            action: "match QR to order"
+      - name: "validate_order"
+        transitions:
+          - target: "complete"
+            trigger: "order match"
+            action: "mark pickup complete"
+          - target: "error"
+            trigger: "mismatch"
+            action: "flag associate review"

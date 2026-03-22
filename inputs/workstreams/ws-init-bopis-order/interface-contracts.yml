@@ -1,0 +1,422 @@
+version: "0.1"
+interfaces:
+  - id: "ifc-product-catalog-api"
+    type: "api"
+    owner_component_id: "comp-ecommerce-catalog"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/product-catalog.oas.yaml"
+    protocol: "REST"
+    auth: "JWT"
+    rate_limit: "500 rps"
+    endpoints:
+      - method: "GET"
+        path: "/api/v1/products/{sku}"
+        description: "Get product details by SKU"
+      - method: "GET"
+        path: "/api/v1/products/{sku}/availability"
+        description: "Get store-level inventory availability for product"
+      - method: "GET"
+        path: "/api/v1/stores"
+        description: "Get list of stores with BOPIS capability"
+      - method: "GET"
+        path: "/api/v1/stores/nearby"
+        description: "Get nearby stores sorted by distance"
+    slo:
+      latency_p95_ms: 200
+      availability: "99.5%"
+    tmf_alignment:
+      api_id: "TMF620"
+      confidence: "mcp_verified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Ecommerce"
+      consumer_workspace_ids: []
+      consumer_domains: ["Order"]
+    notes: "Exposed by Ecommerce domain for Order domain and external HCL Commerce integration"
+
+  - id: "ifc-inventory-management-api"
+    type: "api"
+    owner_component_id: "comp-inventory-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/inventory-management.oas.yaml"
+    protocol: "REST"
+    auth: "mTLS"
+    rate_limit: "200 rps"
+    endpoints:
+      - method: "POST"
+        path: "/api/v1/inventory/reserve"
+        description: "Reserve inventory atomically for order items"
+      - method: "POST"
+        path: "/api/v1/inventory/release"
+        description: "Release reserved inventory for cancelled orders"
+      - method: "GET"
+        path: "/api/v1/inventory/stores/{store_id}/products/{sku}"
+        description: "Get inventory level for product at specific store"
+      - method: "POST"
+        path: "/api/v1/inventory/sync"
+        description: "Sync inventory from external systems"
+    slo:
+      latency_p95_ms: 100
+      availability: "99.9%"
+    tmf_alignment:
+      api_id: "TMF637"
+      confidence: "mcp_verified"
+      additional_apis: ["TMF687"]
+      notes: "TMF637 for product inventory lifecycle; TMF687 reserveProductStock directly maps to BOPIS atomic reservation use case"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Inventory"
+      consumer_workspace_ids: []
+      consumer_domains: ["Order", "Party Role Management"]
+    notes: "Atomic inventory reservation with rollback capability. Consumed by Order domain for order placement"
+
+  - id: "ifc-inventory-sync-event"
+    type: "event"
+    owner_component_id: "comp-inventory-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/schemas/inventory-sync.avsc"
+    topic: "inventory.events.reservation"
+    schema_format: "avro"
+    ordering: "partition_key"
+    retention: "7d"
+    idempotency_key: "event_id"
+    payload_fields:
+      - name: "event_id"
+        type: "string"
+        required: true
+        description: "Unique event identifier"
+      - name: "timestamp"
+        type: "string"
+        required: true
+        description: "ISO 8601 event timestamp"
+      - name: "event_type"
+        type: "string"
+        required: true
+        description: "RESERVED | RELEASED | ADJUSTED"
+      - name: "store_id"
+        type: "string"
+        required: true
+        description: "Store identifier"
+      - name: "product_sku"
+        type: "string"
+        required: true
+        description: "Product SKU"
+      - name: "quantity"
+        type: "int"
+        required: true
+        description: "Quantity reserved/released"
+      - name: "order_id"
+        type: "string"
+        required: false
+        description: "Associated order ID for reservations"
+    tmf_alignment:
+      api_id: ""
+      confidence: "unverified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Inventory"
+      consumer_workspace_ids: []
+      consumer_domains: ["Ecommerce", "Order"]
+    notes: "Event for inventory reservation/release to update channel visibility"
+
+  - id: "ifc-order-management-api"
+    type: "api"
+    owner_component_id: "comp-order-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/order-management.oas.yaml"
+    protocol: "REST"
+    auth: "JWT"
+    rate_limit: "300 rps"
+    endpoints:
+      - method: "POST"
+        path: "/api/v1/orders/bopis"
+        description: "Create BOPIS order with inventory reservation"
+      - method: "GET"
+        path: "/api/v1/orders/{order_id}"
+        description: "Get order details by ID"
+      - method: "GET"
+        path: "/api/v1/orders/customer/{customer_id}"
+        description: "Get customer's order history"
+      - method: "PUT"
+        path: "/api/v1/orders/{order_id}/cancel"
+        description: "Cancel BOPIS order and release inventory"
+    slo:
+      latency_p95_ms: 200
+      availability: "99.5%"
+    tmf_alignment:
+      api_id: "TMF622"
+      confidence: "mcp_verified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Order"
+      consumer_workspace_ids: []
+      consumer_domains: ["Ecommerce", "Party Role Management"]
+    notes: "BOPIS order lifecycle management using TMF622 Product Ordering API. TMF620 is catalog-only; TMF622 is the correct API for order placement. Integrates with HCL Commerce checkout"
+
+  - id: "ifc-order-status-event"
+    type: "event"
+    owner_component_id: "comp-order-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/schemas/order-status.avsc"
+    topic: "order.events.status"
+    schema_format: "avro"
+    ordering: "partition_key"
+    retention: "7d"
+    idempotency_key: "event_id"
+    payload_fields:
+      - name: "event_id"
+        type: "string"
+        required: true
+        description: "Unique event identifier"
+      - name: "timestamp"
+        type: "string"
+        required: true
+        description: "ISO 8601 event timestamp"
+      - name: "order_id"
+        type: "string"
+        required: true
+        description: "Order identifier"
+      - name: "status"
+        type: "string"
+        required: true
+        description: "RECEIVED | PICKING | READY | PICKED_UP | CANCELLED"
+      - name: "store_id"
+        type: "string"
+        required: true
+        description: "Store identifier"
+    tmf_alignment:
+      api_id: ""
+      confidence: "unverified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Order"
+      consumer_workspace_ids: []
+      consumer_domains: ["Fulfillment", "Notification"]
+    notes: "Order status changes propagated to Fulfillment and Notification domains"
+
+  - id: "ifc-party-role-api"
+    type: "api"
+    owner_component_id: "comp-party-role-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/party-role.oas.yaml"
+    protocol: "REST"
+    auth: "mTLS"
+    rate_limit: "100 rps"
+    endpoints:
+      - method: "GET"
+        path: "/api/v1/party-role/stores/{store_id}/orders/pending"
+        description: "Get pending BOPIS orders for store"
+      - method: "PUT"
+        path: "/api/v1/party-role/orders/{order_id}/status"
+        description: "Update order fulfillment status (picking, ready)"
+      - method: "GET"
+        path: "/api/v1/party-role/orders/{order_id}/products"
+        description: "Get product locations for order fulfillment"
+    slo:
+      latency_p95_ms: 200
+      availability: "99.5%"
+    tmf_alignment:
+      api_id: "TMF669"
+      confidence: "mcp_verified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Party Role Management"
+      consumer_workspace_ids: []
+      consumer_domains: ["Order"]
+    notes: "Store associate interface for order fulfillment. TMF669 Party Role Management is the correct API; TMF629 is Customer Management (corrected from prior local_knowledge entry)"
+
+  - id: "ifc-pickup-api"
+    type: "api"
+    owner_component_id: "comp-party-role-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/pickup.oas.yaml"
+    protocol: "REST"
+    auth: "mTLS"
+    rate_limit: "100 rps"
+    endpoints:
+      - method: "POST"
+        path: "/api/v1/pickup/verify"
+        description: "Verify QR code and validate order for pickup"
+      - method: "POST"
+        path: "/api/v1/pickup/complete"
+        description: "Complete order pickup and record transaction"
+      - method: "GET"
+        path: "/api/v1/pickup/orders/{qr_code}"
+        description: "Get order details by QR code"
+    slo:
+      latency_p95_ms: 200
+      availability: "99.5%"
+    tmf_alignment:
+      api_id: ""
+      confidence: "unverified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Party Role Management"
+      consumer_workspace_ids: []
+      consumer_domains: []
+    notes: "QR code verification and pickup completion for store associates"
+
+  - id: "ifc-pickup-event"
+    type: "event"
+    owner_component_id: "comp-party-role-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/schemas/pickup.avsc"
+    topic: "fulfillment.events.pickup"
+    schema_format: "avro"
+    ordering: "partition_key"
+    retention: "30d"
+    idempotency_key: "event_id"
+    payload_fields:
+      - name: "event_id"
+        type: "string"
+        required: true
+        description: "Unique event identifier"
+      - name: "timestamp"
+        type: "string"
+        required: true
+        description: "ISO 8601 event timestamp"
+      - name: "order_id"
+        type: "string"
+        required: true
+        description: "Order identifier"
+      - name: "pickup_type"
+        type: "string"
+        required: true
+        description: "STORE_PICKUP"
+      - name: "store_id"
+        type: "string"
+        required: true
+        description: "Store identifier"
+      - name: "associate_id"
+        type: "string"
+        required: true
+        description: "Store associate identifier"
+    tmf_alignment:
+      api_id: ""
+      confidence: "unverified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Party Role Management"
+      consumer_workspace_ids: []
+      consumer_domains: ["Order"]
+    notes: "Pickup completion event for order finalization and analytics"
+
+  - id: "ifc-notification-api"
+    type: "api"
+    owner_component_id: "comp-notification-service"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/notification.oas.yaml"
+    protocol: "REST"
+    auth: "mTLS"
+    rate_limit: "200 rps"
+    endpoints:
+      - method: "POST"
+        path: "/api/v1/notifications/send"
+        description: "Send notification (email/SMS) to customer"
+      - method: "POST"
+        path: "/api/v1/notifications/templates"
+        description: "Register notification template"
+    slo:
+      latency_p95_ms: 500
+      availability: "99.5%"
+    tmf_alignment:
+      api_id: ""
+      confidence: "unverified"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Notification"
+      consumer_workspace_ids: []
+      consumer_domains: ["Order"]
+    notes: "Notification delivery via external email/SMS providers"
+
+  - id: "ifc-hcl-commerce-integration"
+    type: "api"
+    owner_component_id: "comp-ecommerce-catalog"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/hcl-commerce-integration.oas.yaml"
+    protocol: "REST"
+    auth: "API_KEY"
+    rate_limit: "500 rps"
+    endpoints:
+      - method: "GET"
+        path: "/hcl-commerce/api/products"
+        description: "Fetch product catalog from HCL Commerce"
+      - method: "POST"
+        path: "/hcl-commerce/api/inventory"
+        description: "Query store inventory from HCL Commerce"
+      - method: "POST"
+        path: "/hcl-commerce/api/orders"
+        description: "Create order in HCL Commerce system"
+    slo:
+      latency_p95_ms: 500
+      availability: "95.0%"
+    tmf_alignment:
+      api_id: ""
+      confidence: "local_knowledge"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Ecommerce"
+      consumer_workspace_ids: []
+      consumer_domains: []
+    notes: "External integration to HCL Commerce platform for product catalog and order creation"
+
+  - id: "ifc-pos-integration"
+    type: "api"
+    owner_component_id: "comp-party-role-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/pos-integration.oas.yaml"
+    protocol: "REST"
+    auth: "API_KEY"
+    rate_limit: "100 rps"
+    endpoints:
+      - method: "POST"
+        path: "/pos/api/transactions"
+        description: "Create transaction in POS system"
+      - method: "GET"
+        path: "/pos/api/inventory"
+        description: "Fetch inventory from POS system"
+    slo:
+      latency_p95_ms: 500
+      availability: "95.0%"
+    tmf_alignment:
+      api_id: ""
+      confidence: "local_knowledge"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Party Role Management"
+      consumer_workspace_ids: []
+      consumer_domains: []
+    notes: "External integration to POS system for store transactions"
+
+  - id: "ifc-inventory-system-integration"
+    type: "api"
+    owner_component_id: "comp-inventory-management"
+    version: "0.1.0"
+    spec_path: "docs/reference/oas/inventory-system-integration.oas.yaml"
+    protocol: "REST"
+    auth: "API_KEY"
+    rate_limit: "200 rps"
+    endpoints:
+      - method: "GET"
+        path: "/inventory-system/api/stock"
+        description: "Fetch current inventory levels"
+      - method: "POST"
+        path: "/inventory-system/api/adjustments"
+        description: "Send inventory adjustments to external system"
+    slo:
+      latency_p95_ms: 500
+      availability: "95.0%"
+    tmf_alignment:
+      api_id: ""
+      confidence: "local_knowledge"
+    cross_workspace:
+      provider_workspace_id: ""
+      provider_domain: "Inventory"
+      consumer_workspace_ids: []
+      consumer_domains: []
+    notes: "External integration to inventory management system for stock synchronization"
+
+governance:
+  versioning: "semver"
+  deprecation_window: "6 months"
+  breaking_change_policy: "new version required; old version supported for deprecation_window"

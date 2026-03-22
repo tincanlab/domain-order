@@ -1,0 +1,8 @@
+upstream_repo_url: https://github.com/tincanlab/solution-bopis
+handoff_ref: db1104a
+captured_at: "2026-03-22T20:26:20.8879949Z"
+workstream_id: ws-init-bopis-order
+solution_key: bopis
+initiative_id: init-bopis
+reason: Bootstrap the Order domain repository from the approved BOPIS solution architecture handoff.
+artifact_path: inputs/workstreams/ws-init-bopis-order

@@ -1,0 +1,6 @@
+spec_name: multi-scale-routing
+spec_version: "1.0.0"
+
+work_items: []
+
+notes: Order domain has been bootstrapped from SA handoff. Publish implementation work items when service repos or repo paths are assigned.

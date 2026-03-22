@@ -1,0 +1,327 @@
+version: "0.1"
+
+context:
+  workspace_id: "ws-init-bopis-order"
+  workspace_kind: "domain"
+  domain_name: "Order"
+  domain_profile: "order-management"
+  cascade_state:
+    requirements: "approved"
+    solution_architecture: "approved"
+    domain_architecture: "draft"
+  topology_snapshot:
+    parent_workspaces:
+      - "solution-bopis"
+    sibling_workspaces:
+      - "domain-ecommerce"
+      - "domain-inventory"
+      - "domain-party-role"
+      - "domain-notification"
+  sa_baseline:
+    architecture_design_path: "inputs/workstreams/ws-init-bopis-order/architecture-design.yml"
+    interface_contracts_path: "inputs/workstreams/ws-init-bopis-order/interface-contracts.yml"
+    component_specs_path: "inputs/workstreams/ws-init-bopis-order/component-specs.yml"
+  generated_at: "2026-03-22T20:26:20.8879949Z"
+
+bounded_context:
+  name: "Order"
+  description: "BOPIS order lifecycle management from order placement through pickup completion, including order status, cancellation, and pickup readiness."
+  ubiquitous_language:
+    - term: "BOPIS order"
+      definition: "A customer order placed online for pickup in a store."
+    - term: "pickup ready"
+      definition: "The order has been fulfilled and is ready for store pickup."
+    - term: "pickup completion"
+      definition: "The customer has collected the order and the order is finalized."
+    - term: "reservation"
+      definition: "The inventory hold created before the order is confirmed."
+  anti_corruption_layers:
+    - external_domain: "Ecommerce"
+      strategy: "translator"
+      interface_id: "ifc-product-catalog-api"
+    - external_domain: "Inventory"
+      strategy: "adapter"
+      interface_id: "ifc-inventory-management-api"
+    - external_domain: "Notification"
+      strategy: "facade"
+      interface_id: "ifc-notification-api"
+    - external_domain: "Party Role Management"
+      strategy: "adapter"
+      interface_id: "ifc-pickup-event"
+
+aggregates:
+  - id: "ord-order"
+    name: "Order"
+    description: "Primary aggregate for BOPIS order lifecycle and status transitions."
+    root_entity: true
+    entities:
+      - id: "ord-order-entity"
+        name: "Order"
+        fields:
+          - name: "order_id"
+            type: "string"
+            required: true
+            constraints: "globally unique, immutable"
+          - name: "customer_id"
+            type: "string"
+            required: true
+            constraints: "required for customer lookup"
+          - name: "store_id"
+            type: "string"
+            required: true
+            constraints: "must reference pickup store"
+          - name: "status"
+            type: "string"
+            required: true
+            constraints: "one of RECEIVED, RESERVED, CONFIRMED, READY_FOR_PICKUP, PICKED_UP, CANCELLED"
+          - name: "created_at"
+            type: "timestamp"
+            required: true
+            constraints: "UTC"
+          - name: "updated_at"
+            type: "timestamp"
+            required: true
+            constraints: "UTC"
+        indexes:
+          - "customer_id"
+          - "store_id"
+          - "status"
+    value_objects:
+      - name: "OrderId"
+        fields:
+          - name: "value"
+            type: "string"
+      - name: "PickupWindow"
+        fields:
+          - name: "start_at"
+            type: "timestamp"
+          - name: "end_at"
+            type: "timestamp"
+    domain_events:
+      - id: "evt-order-placed"
+        name: "OrderPlaced"
+        trigger: "command"
+        payload_fields:
+          - "order_id"
+          - "customer_id"
+          - "store_id"
+      - id: "evt-order-ready"
+        name: "OrderReadyForPickup"
+        trigger: "state transition"
+        payload_fields:
+          - "order_id"
+          - "store_id"
+      - id: "evt-order-picked-up"
+        name: "OrderPickedUp"
+        trigger: "state transition"
+        payload_fields:
+          - "order_id"
+          - "picked_up_at"
+      - id: "evt-order-cancelled"
+        name: "OrderCancelled"
+        trigger: "state transition"
+        payload_fields:
+          - "order_id"
+          - "cancel_reason"
+    storage:
+      type: "relational"
+      technology: "PostgreSQL"
+      consistency: "strong"
+      access_patterns:
+        - "order lookup by id"
+        - "customer order history"
+        - "store queue / pickup tracking"
+    sid_alignment:
+      entity: "CustomerOrder"
+      confidence: "local_knowledge"
+
+workflows:
+  - id: "wf-order-lifecycle"
+    name: "Order lifecycle"
+    type: "state_machine"
+    description: "Lifecycle from order creation through pickup completion or cancellation."
+    states:
+      - name: "RECEIVED"
+        type: "initial"
+        transitions:
+          - target: "RESERVED"
+            trigger: "inventory reservation confirmed"
+            guard: "inventory available"
+            action: "persist reservation and create order"
+            event_emitted: "evt-order-placed"
+      - name: "RESERVED"
+        type: "intermediate"
+        transitions:
+          - target: "CONFIRMED"
+            trigger: "order accepted"
+            guard: "payment / commerce acceptance complete"
+            action: "confirm order"
+            event_emitted: "evt-order-placed"
+          - target: "CANCELLED"
+            trigger: "customer cancel"
+            guard: "order cancellable"
+            action: "release reservation"
+            event_emitted: "evt-order-cancelled"
+      - name: "CONFIRMED"
+        type: "intermediate"
+        transitions:
+          - target: "READY_FOR_PICKUP"
+            trigger: "fulfillment complete"
+            guard: "items picked and staged"
+            action: "emit readiness"
+            event_emitted: "evt-order-ready"
+          - target: "CANCELLED"
+            trigger: "store cancel"
+            guard: "order not yet picked up"
+            action: "release reservation and notify customer"
+            event_emitted: "evt-order-cancelled"
+      - name: "READY_FOR_PICKUP"
+        type: "intermediate"
+        transitions:
+          - target: "PICKED_UP"
+            trigger: "pickup verified"
+            guard: "customer identity and QR validated"
+            action: "close order"
+            event_emitted: "evt-order-picked-up"
+      - name: "PICKED_UP"
+        type: "terminal"
+        transitions: []
+      - name: "CANCELLED"
+        type: "terminal"
+        transitions: []
+    compensating_actions:
+      - step: "cancel order"
+        compensation: "release inventory reservation"
+      - step: "pickup verification failure"
+        compensation: "retain order in READY_FOR_PICKUP and alert associate"
+    tmf_alignment:
+      process: "Support Customer Order Management"
+      confidence: "local_knowledge"
+
+interface_implementations:
+  - interface_id: "ifc-order-management-api"
+    implementation_component: "comp-order-management"
+    conformance: "full"
+    deviation_notes: ""
+    api_details:
+      operations:
+        - method: "POST"
+          path: "/api/v1/orders/bopis"
+          description: "Create BOPIS order with reservation and fulfillment initiation."
+          request_schema: "OrderCreateRequest"
+          response_schema: "OrderResponse"
+          error_codes: ["400", "409", "422", "500"]
+          auth: "JWT"
+          rate_limit: "300 rps"
+        - method: "GET"
+          path: "/api/v1/orders/{order_id}"
+          description: "Get order by id."
+          request_schema: "N/A"
+          response_schema: "OrderResponse"
+          error_codes: ["404", "500"]
+          auth: "JWT"
+          rate_limit: "300 rps"
+        - method: "GET"
+          path: "/api/v1/orders/customer/{customer_id}"
+          description: "List customer orders."
+          request_schema: "N/A"
+          response_schema: "OrderListResponse"
+          error_codes: ["404", "500"]
+          auth: "JWT"
+          rate_limit: "300 rps"
+        - method: "PUT"
+          path: "/api/v1/orders/{order_id}/cancel"
+          description: "Cancel an order and release reservations."
+          request_schema: "OrderCancelRequest"
+          response_schema: "OrderResponse"
+          error_codes: ["404", "409", "500"]
+          auth: "JWT"
+          rate_limit: "300 rps"
+      pagination: "offset"
+      versioning: "path"
+  - interface_id: "ifc-order-status-event"
+    implementation_component: "comp-order-management"
+    conformance: "full"
+    deviation_notes: ""
+    api_details:
+      operations:
+        - method: "EVENT"
+          path: "order.events.status"
+          description: "Emit order lifecycle transitions for fulfillment and notification consumers."
+          request_schema: "OrderStatusEvent"
+          response_schema: "N/A"
+          error_codes: ["N/A"]
+          auth: "service-to-service"
+          rate_limit: "event-driven"
+      pagination: "none"
+      versioning: "event-schema"
+
+tmf_alignment:
+  covered_apis:
+    - api_id: "TMF622"
+      operations_covered:
+        - "POST /api/v1/orders/bopis"
+        - "GET /api/v1/orders/{order_id}"
+        - "GET /api/v1/orders/customer/{customer_id}"
+        - "PUT /api/v1/orders/{order_id}/cancel"
+      confidence: "local_knowledge"
+  uncovered_apis:
+    - api_id: "TMF620"
+      reason: "Catalog API is owned by Ecommerce domain and consumed here via ACL"
+  sid_mappings:
+    - domain_entity: "ord-order"
+      sid_entity: "CustomerOrder"
+      confidence: "local_knowledge"
+
+compliance:
+  - standard: "PCI_DSS"
+    applicability: "Order orchestration touches payment-adjacent checkout flows."
+    controls:
+      - "encrypt data in transit and at rest"
+      - "least privilege service access"
+    notes: "No payment card storage in this domain."
+  - standard: "GDPR"
+    applicability: "Customer identity and order history processing."
+    controls:
+      - "data minimization"
+      - "subject access support"
+    notes: "Customer data should be retained only as required."
+  - standard: "CCPA"
+    applicability: "Customer order history and fulfillment records."
+    controls:
+      - "access disclosure"
+      - "deletion workflow coordination"
+    notes: "Deletion requests may require downstream coordination."
+
+decisions:
+  - id: "adr-001"
+    title: "Order aggregate is the lifecycle system of record"
+    status: "proposed"
+    context: "BOPIS order state changes must remain consistent across fulfillment and customer notification consumers."
+    decision: "Use a single order aggregate to own lifecycle transitions and publish status events."
+    consequences: "Simplifies read/write consistency and clarifies cancellation semantics."
+    sa_deviation: false
+    sa_review_required: false
+  - id: "adr-002"
+    title: "Inventory reservation is a prerequisite for confirmation"
+    status: "proposed"
+    context: "Order confirmation depends on real-time store inventory availability."
+    decision: "Treat inventory reservation as a gating step before order confirmation."
+    consequences: "Failed reservations trigger immediate cancellation or retry handling."
+    sa_deviation: false
+    sa_review_required: false
+
+sa_conformance:
+  nfr_budget_fit: true
+  interface_conformance:
+    - interface_id: "ifc-order-management-api"
+      status: "conformant"
+      notes: "Matches the SA order handoff baseline."
+    - interface_id: "ifc-order-status-event"
+      status: "conformant"
+      notes: "Matches SA event propagation expectations."
+  pattern_conformance:
+    - pattern: "API-first + event-driven orchestration"
+      status: "conformant"
+      notes: "Order uses synchronous commands plus asynchronous status propagation."
+  issues: []

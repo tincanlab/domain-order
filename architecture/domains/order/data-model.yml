@@ -1,0 +1,86 @@
+version: "0.1"
+
+domain: "order"
+
+entities:
+  - id: "ord-order"
+    name: "Order"
+    description: "Primary order record."
+    fields:
+      - name: "order_id"
+        type: "string"
+        required: true
+        unique: true
+      - name: "customer_id"
+        type: "string"
+        required: true
+      - name: "store_id"
+        type: "string"
+        required: true
+      - name: "status"
+        type: "string"
+        required: true
+      - name: "created_at"
+        type: "timestamp"
+        required: true
+      - name: "updated_at"
+        type: "timestamp"
+        required: true
+  - id: "ord-order-line-item"
+    name: "OrderLineItem"
+    description: "Line items attached to an order."
+    fields:
+      - name: "line_item_id"
+        type: "string"
+        required: true
+        unique: true
+      - name: "order_id"
+        type: "string"
+        required: true
+      - name: "sku"
+        type: "string"
+        required: true
+      - name: "quantity"
+        type: "integer"
+        required: true
+      - name: "status"
+        type: "string"
+        required: true
+  - id: "ord-order-status-history"
+    name: "OrderStatusHistory"
+    description: "Append-only audit of order lifecycle transitions."
+    fields:
+      - name: "event_id"
+        type: "string"
+        required: true
+        unique: true
+      - name: "order_id"
+        type: "string"
+        required: true
+      - name: "from_status"
+        type: "string"
+        required: true
+      - name: "to_status"
+        type: "string"
+        required: true
+      - name: "changed_at"
+        type: "timestamp"
+        required: true
+
+relationships:
+  - from: "ord-order"
+    to: "ord-order-line-item"
+    type: "one-to-many"
+    via: "order_id"
+  - from: "ord-order"
+    to: "ord-order-status-history"
+    type: "one-to-many"
+    via: "order_id"
+
+storage:
+  technology: "PostgreSQL"
+  consistency: "strong"
+  access_patterns:
+    - "lookup by order id"
+    - "list orders by customer"
+    - "audit order state transitions"
