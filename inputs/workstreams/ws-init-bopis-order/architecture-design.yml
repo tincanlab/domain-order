@@ -1,0 +1,542 @@
+version: '0.1'
+context:
+  workspace_id: ''
+  workspace_kind: project
+  industry:
+    vertical: telco
+    sub_vertical: retail-telco
+    standards:
+    - TM Forum ODA
+    - TM Forum Open APIs
+    - TM Forum SID
+    - TM Forum eTOM
+    - PCI DSS
+    - GDPR
+    - CCPA
+  cascade_state:
+    requirements: approved
+    solution_architecture: proposed
+  topology_snapshot:
+    parent_workspaces: []
+    child_workspaces: []
+    sibling_workspaces: []
+  requirements_baseline:
+    path: architecture/requirements/requirements.yml
+    artifact_id: ''
+  generated_at: '2025-02-27T00:00:00Z'
+drivers:
+  nfrs:
+  - id: nfr-availability
+    text: System must maintain 99.5% uptime during store operating hours
+    target: '>= 99.5%'
+    source_req: nfr-availability
+  - id: nfr-inventory-sync
+    text: Inventory visibility updates must reflect within 30 seconds of reservation
+    target: <= 30 seconds
+    source_req: nfr-inventory-sync
+  - id: nfr-checkout-latency
+    text: Checkout flow must complete within 2 minutes for BOPIS orders
+    target: <= 2 minutes
+    source_req: nfr-checkout-latency
+  - id: nfr-associate-ui-latency
+    text: Store associate interface must load within 3 seconds
+    target: <= 3 seconds
+    source_req: nfr-associate-ui-latency
+  - id: nfr-notification-latency
+    text: Customer pickup notifications must be sent within 2 minutes of order readiness
+    target: <= 2 minutes
+    source_req: nfr-notification-latency
+  - id: nfr-throughput
+    text: System must support concurrent BOPIS transactions during peak periods
+    target: '>= 100 orders/minute per store cluster'
+    source_req: nfr-throughput
+  - id: nfr-security
+    text: Customer data must be encrypted at rest and in transit
+    target: AES-256 encryption, TLS 1.3
+    source_req: nfr-security
+  - id: nfr-data-retention
+    text: BOPIS order data must be retained for compliance and audit purposes
+    target: '>= 7 years'
+    source_req: nfr-data-retention
+  - id: nfr-recovery-time
+    text: System must recover from failures within acceptable timeframes
+    target: RTO < 4 hours, RPO < 1 hour
+    source_req: nfr-recovery-time
+  constraints:
+  - Must integrate with HCL Commerce e-commerce platform
+  - Must integrate with existing POS and inventory management systems
+  - Must comply with PCI DSS for payment processing
+  - Must comply with GDPR for customer data processing and storage
+  - Must comply with CCPA for California resident data privacy
+  - Must comply with local data protection regulations for international stores
+  - BOPIS capability must be available during store operating hours (8am-10pm)
+  regulatory:
+  - PCI DSS
+  - GDPR
+  - CCPA
+  - Local data protection regulations (international stores)
+standards_validation:
+  status: verified
+  evidence:
+  - type: tmf_oda_alignment
+    description: Domain decomposition aligned with TMF ODA components
+    artifacts:
+    - architecture/solution/architecture-design.yml
+    - architecture/solution/tmf-validation-summary.md
+    tmfc_components:
+    - tmfc_id: TMFC001
+      name: Product Catalog Management
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - tmfc_id: TMFC005
+      name: Product Inventory Management
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - tmfc_id: TMFC003
+      name: Product Order Delivery Orchestration And Management
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - tmfc_id: TMFC028
+      name: Party Management
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+  - type: tmf_open_api_usage
+    description: Solution uses TMF620 (Product Catalog/Order Management), TMF637 (Product
+      Inventory Management), TMF669 (Party Role Management), and TMF687 (Stock Reservation)
+      Open APIs
+    artifacts:
+    - architecture/solution/interface-contracts.yml
+    - architecture/solution/domain-api-validation-report.md
+    tmf_apis:
+    - api_id: TMF620
+      name: Product Catalog Management API
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - api_id: TMF637
+      name: Product Inventory Management API
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - api_id: TMF622
+      name: Order Management API
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - api_id: TMF669
+      name: Party Role Management API
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+    - api_id: TMF687
+      name: Stock Reservation API
+      verified_by: tmf-mcp
+      verification_date: '2025-02-27T00:00:00Z'
+  - type: tmf_sid_alignment
+    description: Data entities aligned with TMF SID including CustomerProductOrder,
+      ProductInventory, and related ABEs
+    artifacts:
+    - architecture/solution/architecture-design.yml
+    - architecture/solution/tmf-validation-summary.md
+  - type: tmf_etom_alignment
+    description: eTOM processes mapped across all domains
+    artifacts:
+    - architecture/solution/tmf-validation-summary.md
+architecture:
+  description: 'BOPIS solution integrates HCL Commerce e-commerce platform with POS/inventory
+    systems to enable cross-channel shopping. Customers browse online, view real-time
+    store inventory, place BOPIS orders, and pick up in-store. The architecture follows
+    API-first, event-driven microservices pattern with five core domains: Ecommerce,
+    Inventory, Order, Fulfillment, and Notification.'
+  patterns:
+  - name: microservices
+    rationale: Domain decomposition enables independent development, deployment, and
+      scaling of Ecommerce, Inventory, Order, Fulfillment, and Notification domains
+    nfr_driver: nfr-throughput, nfr-availability
+  - name: api-first
+    rationale: All integrations between domains and external systems (HCL Commerce,
+      POS, inventory, email/SMS) use well-defined REST APIs with clear contracts
+    nfr_driver: nfr-checkout-latency, nfr-inventory-sync
+  - name: event-driven
+    rationale: Inventory reservations, order state changes, and notifications propagate
+      asynchronously via events for real-time accuracy without blocking
+    nfr_driver: nfr-inventory-sync, nfr-notification-latency
+  - name: cqrs
+    rationale: Order read (customer queries) and write (order placement) operations
+      are separated to optimize performance and scalability
+    nfr_driver: nfr-throughput, nfr-checkout-latency
+  deployment_topology: Multi-tier cloud deployment with API gateway layer, application
+    microservices layer (Ecommerce, Inventory, Order, Fulfillment, Notification),
+    data layer (relational database, event bus, cache), and external integration layer
+    (HCL Commerce, POS, inventory systems). Store associate tablets connect via mobile
+    app to Fulfillment domain APIs. Customers access via HCL Commerce storefront.
+domains:
+- id: ecommerce
+  name: Ecommerce Domain
+  description: Manages product catalog, store location search, and BOPIS inventory
+    visibility for online customers. Integrates with HCL Commerce platform to provide
+    product data and store inventory information.
+  oda_component_name: Product Catalog Management
+  tmfc_component_id: TMFC001
+  component_specs_path: architecture/solution/domain-handoffs/ecommerce/component-specs.yml
+  workspace_id: ''
+  interface_contracts:
+  - ifc-product-catalog-api
+- id: inventory
+  name: Inventory Domain
+  description: Manages product inventory across stores, handles real-time reservations,
+    and synchronizes inventory with external systems.
+  oda_component_name: Product Inventory Management
+  tmfc_component_id: TMFC005
+  component_specs_path: architecture/solution/domain-handoffs/inventory/component-specs.yml
+  workspace_id: ''
+  interface_contracts:
+  - ifc-inventory-management-api
+  - ifc-inventory-sync-event
+- id: order
+  name: Order Domain
+  description: Manages BOPIS order lifecycle from placement through pickup completion.
+    Handles order status tracking and customer queries.
+  oda_component_name: Product Order Delivery Orchestration And Management
+  tmfc_component_id: TMFC003
+  component_specs_path: architecture/solution/domain-handoffs/order/component-specs.yml
+  workspace_id: ''
+  interface_contracts:
+  - ifc-order-management-api
+  - ifc-order-status-event
+- id: party-role
+  name: Party Role Management Domain
+  description: Manages store associate interface for order fulfillment and pickup
+    processing. Handles QR code verification and order completion.
+  oda_component_name: Party Management
+  tmfc_component_id: TMFC028
+  component_specs_path: architecture/solution/domain-handoffs/party-role/component-specs.yml
+  workspace_id: ''
+  interface_contracts:
+  - ifc-party-role-api
+  - ifc-pickup-api
+  - ifc-pickup-event
+- id: notification
+  name: Notification Domain
+  description: Manages customer notifications for order readiness and pickup instructions
+    via email and SMS.
+  oda_component_name: Notification Service
+  component_specs_path: architecture/solution/domain-handoffs/notification/component-specs.yml
+  workspace_id: ''
+  interface_contracts:
+  - ifc-notification-api
+nfr_budget:
+- tier: api-gateway
+  latency_budget_ms: 100
+  availability: 99.9%
+  throughput_rps: 1000
+  cost_envelope: M
+- tier: application-services
+  latency_budget_ms: 200
+  availability: 99.5%
+  throughput_rps: 500
+  cost_envelope: L
+- tier: data-layer
+  latency_budget_ms: 50
+  availability: 99.9%
+  throughput_rps: 1000
+  cost_envelope: XL
+- tier: external-integrations
+  latency_budget_ms: 500
+  availability: 95.0%
+  throughput_rps: 100
+  cost_envelope: M
+tmf_alignment:
+  oda_components:
+  - name: Product Catalog Management
+    oda_component_id: TMFC001
+    oda_component: ProductCatalogManagement
+    functional_block: CoreCommerce
+    confidence: mcp_verified
+    validation_status: verified
+  - name: Product Inventory Management
+    oda_component_id: TMFC005
+    oda_component: ProductInventory
+    functional_block: CoreCommerce
+    confidence: mcp_verified
+    validation_status: verified
+  - name: Product Order Delivery Orchestration And Management
+    oda_component_id: TMFC003
+    oda_component: ProductOrderDeliveryOrchestrationAndManagement
+    functional_block: CoreCommerce
+    confidence: mcp_verified
+    validation_status: verified
+  - name: Party Management
+    oda_component_id: TMFC028
+    oda_component: PartyManagement
+    functional_block: PartyManagement
+    confidence: mcp_verified
+    validation_status: verified
+    notes: Best available ODA match for Party Role Management domain. TMFC028 manages
+      parties and their roles. No TMF ODA component exists specifically for in-store
+      associate fulfillment operations.
+  etom_processes:
+  - domain_id: ecommerce
+    processes:
+    - process_id: 1.2.7.2.3
+      process_name: Product Offering Cataloging
+      level: 4
+      domain: Product Domain
+      parent_id: 1.2.7.2
+      confidence: mcp_verified
+  - domain_id: ecommerce
+    processes:
+    - process_id: 1.3.1.2.1
+      process_name: Support Customer Order Management
+      level: 3
+      domain: Customer Domain
+      parent_id: 1.3.1.2
+      confidence: mcp_verified
+  - domain_id: ecommerce
+    processes:
+    - process_id: 1.2.7.2.3.2
+      process_name: Product Offering Lifecycle Management
+      level: 6
+      domain: Product Domain
+      parent_id: 1.2.7.2.3
+      confidence: mcp_verified
+  - domain_id: ecommerce
+    processes:
+    - process_id: 1.2.7.2.2
+      process_name: Associate Product Offering with Product Offering Catalog
+      level: 6
+      domain: Product Domain
+      parent_id: 1.2.7.2.3
+      confidence: mcp_verified
+  - domain_id: inventory
+    processes:
+    - process_id: 1.2.11
+      process_name: Product Inventory Management
+      level: 2
+      domain: Product Domain
+      parent_id: '1.2'
+      confidence: mcp_verified
+  - domain_id: inventory
+    processes:
+    - process_id: 1.2.11.4
+      process_name: Ensure Product Inventory Quality
+      level: 3
+      domain: Product Domain
+      parent_id: 1.2.11
+      confidence: mcp_verified
+  - domain_id: inventory
+    processes:
+    - process_id: 1.7.10.2.3
+      process_name: Develop Stock/Inventory Management Policy
+      level: 4
+      domain: Enterprise Domain
+      parent_id: 1.7.10.2
+      confidence: mcp_verified
+  - domain_id: inventory
+    processes:
+    - process_id: 1.7.5.4.4
+      process_name: Managing inventory Transactions
+      level: 4
+      domain: Enterprise Domain
+      parent_id: 1.7.5.4
+      confidence: mcp_verified
+  - domain_id: inventory
+    processes:
+    - process_id: 1.7.10.5.1
+      process_name: Manage Inventory
+      level: 4
+      domain: Enterprise Domain
+      parent_id: 1.7.10.5
+      confidence: mcp_verified
+  - domain_id: order
+    processes:
+    - process_id: 1.3.1.2
+      process_name: Support Customer Order Management
+      level: 3
+      domain: Customer Domain
+      parent_id: 1.3.1.2
+      confidence: mcp_verified
+  - domain_id: order
+    processes:
+    - process_id: 1.3.3.18.1
+      process_name: Define Customer Order Policy
+      level: 4
+      domain: null
+      parent_id: 1.3.3.18
+      confidence: mcp_verified
+  - domain_id: order
+    processes:
+    - process_id: 1.3.3.16
+      process_name: Manage Customer Order Management Report
+      level: 3
+      domain: null
+      parent_id: 1.3.3
+      confidence: mcp_verified
+  - domain_id: order
+    processes:
+    - process_id: 1.3.3.10
+      process_name: Manage Customer Order Placement
+      level: 3
+      domain: null
+      parent_id: 1.3.3
+      confidence: mcp_verified
+  - domain_id: order
+    processes:
+    - process_id: 1.3.20
+      process_name: Customer Lifecycle Management (Deleted)
+      level: 2
+      domain: null
+      parent_id: '1.3'
+      confidence: mcp_verified
+  - domain_id: fulfillment
+    processes:
+    - process_id: 1.5.5.8
+      process_name: Manage Resource Order Fulfillment
+      level: 3
+      domain: Resource Domain
+      parent_id: 1.5.5
+      confidence: mcp_verified
+  - domain_id: fulfillment
+    processes:
+    - process_id: 1.3.3.12
+      process_name: Manage Customer Order Fulfillment
+      level: 3
+      domain: null
+      parent_id: 1.3.3
+      confidence: mcp_verified
+  - domain_id: fulfillment
+    processes:
+    - process_id: 1.7.10.6
+      process_name: Manage Fulfillment
+      level: 3
+      domain: Enterprise Domain
+      parent_id: 1.7.10
+      confidence: mcp_verified
+  - domain_id: fulfillment
+    processes:
+    - process_id: 1.3.19.3.2
+      process_name: Deliver Customer Order Carry Through Capability
+      level: 4
+      domain: null
+      parent_id: 1.3.19.3
+      confidence: mcp_verified
+  - domain_id: fulfillment
+    processes:
+    - process_id: 1.6.8.4.2
+      process_name: Accept Business Partner Order
+      level: 4
+      domain: Business Partner Domain
+      parent_id: 1.6.8.4
+      confidence: mcp_verified
+  open_apis:
+  - id: TMF620
+    version: 5.0.0
+    api_name: Product Catalog Management
+    confidence: mcp_verified
+    validation_status: verified
+    used_by:
+    - ecommerce
+  - id: TMF622
+    version: 5.0.0
+    api_name: Product Ordering
+    confidence: mcp_verified
+    validation_status: verified
+    used_by:
+    - order
+  - id: TMF637
+    version: 5.0.0
+    api_name: Product Inventory
+    confidence: mcp_verified
+    validation_status: verified
+    used_by:
+    - inventory
+  - id: TMF687
+    version: 4.0.0
+    api_name: Stock Management
+    confidence: mcp_verified
+    validation_status: applicable
+    used_by:
+    - inventory
+    notes: TMF687 reserveProductStock directly maps to BOPIS inventory reservation
+      use case; used alongside TMF637
+  - id: TMF669
+    version: 5.0.0
+    api_name: Party Role Management
+    confidence: mcp_verified
+    validation_status: verified
+    used_by:
+    - party-role
+  sid_entities:
+  - domain_id: order
+    entity_name: CustomerProductOrder
+    abe: Customer Product Order ABE
+    confidence: mcp_verified
+    validation_status: verified
+  - domain_id: order
+    entity_name: CustomerProductOrderItem
+    abe: Customer Product Order ABE
+    confidence: mcp_verified
+    validation_status: verified
+  - domain_id: order
+    entity_name: BusinessPartnerProductOrderItem
+    abe: Business Partner Product Order ABE
+    confidence: mcp_verified
+    validation_status: verified
+  - domain_id: ecommerce
+    entity_name: ProductOrder
+    abe: Product Order ABE
+    confidence: mcp_verified
+    validation_status: verified
+  - domain_id: inventory
+    entity_name: ProductInventory
+    abe: Product Inventory ABE
+    confidence: mcp_verified
+    validation_status: verified
+  validation_plan: architecture/solution/tmf-validation-plan.md
+  validation_status: mcp_verified
+  validation_date: '2025-02-27T00:00:00Z'
+decisions:
+- id: adr-001
+  title: 'Architecture Pattern: Microservices with API-First and Event-Driven Design'
+  status: proposed
+  context: BOPIS requires real-time inventory visibility, order tracking across multiple
+    systems (HCL Commerce, POS, inventory management), and low-latency customer/associate
+    interfaces. Requirements specify 30-second inventory sync, 2-minute checkout,
+    and support for 1,000 orders/day.
+  decision: Adopt microservices architecture with API-first contracts between domains
+    and event-driven synchronization for inventory and order state changes. Five domains
+    (Ecommerce, Inventory, Order, Fulfillment, Notification) provide clear ownership
+    boundaries and enable independent scaling.
+  consequences: 'Benefits: Independent development/deployment per domain, clear ownership,
+    better scalability. Trade-offs: Increased operational complexity, requires robust
+    API governance and event schema management.'
+  alternatives:
+  - 'Monolithic application: Simpler deployment but harder to scale and maintain with
+    multiple integration points'
+  - 'Modular monolith: Middle ground but still has shared deployment and scaling constraints'
+- id: adr-002
+  title: 'Inventory Synchronization Strategy: Event-Driven with Atomic Reservations'
+  status: proposed
+  context: Requirements specify inventory must reflect within 30 seconds of reservation
+    and handle concurrent reservations without race conditions. 1,000 orders/day with
+    peak loads require accurate inventory visibility.
+  decision: Use atomic database transactions for inventory reservation at order placement,
+    followed by event-driven synchronization to propagate inventory changes to all
+    channels. Events published to event bus for real-time updates to Ecommerce, Order,
+    and external systems.
+  consequences: 'Benefits: Strong consistency for reservations, real-time channel
+    updates, no overselling. Trade-offs: Eventual consistency for channel sync, requires
+    idempotent event consumers and replay capability.'
+  alternatives:
+  - 'Polling sync: Simpler but higher latency and resource usage'
+  - 'Direct API calls: Tight coupling, no decoupling, cascading failures'
+- id: adr-003
+  title: 'Customer Verification: QR Code Only'
+  status: proposed
+  context: Requirements specify QR code only verification for BOPIS pickup. No additional
+    ID or phone verification required. This balances security with customer convenience.
+  decision: Generate unique QR code per order containing order identifier and cryptographic
+    signature. Store associates scan QR code via tablet app to validate order and
+    complete pickup.
+  consequences: 'Benefits: Fast pickup experience, minimal customer friction, secure
+    verification. Trade-offs: Requires secure QR code generation and verification
+    logic, lost device handling process needed.'
+  alternatives:
+  - 'Order number + phone verification: More verification steps but no device requirement'
+  - 'Government ID verification: Stronger security but poor customer experience'
