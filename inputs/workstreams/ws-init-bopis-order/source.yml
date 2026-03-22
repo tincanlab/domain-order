@@ -1,6 +1,6 @@
 upstream_repo_url: https://github.com/tincanlab/solution-bopis
 handoff_ref: 7c4d2e370e526ecdffd19ad741084c2949e0b035
-captured_at: '2026-03-22T18:37:55.394035Z'
+captured_at: '2026-03-22T19:54:49.368631Z'
 workstream_id: ws-init-bopis-order
 solution_key: bopis
 initiative_id: init-bopis
