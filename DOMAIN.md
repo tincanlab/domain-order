@@ -26,7 +26,7 @@ If enterprise level is absent in your organization, replace with `Not applicable
 DOMAIN.md                                          <- you are here
 AGENTS.md                                          <- repo-specific agent instructions
 ROADMAP.md                                         <- DA-owned developer-facing plan
-implementation-catalog.yml                         <- canonical implementation routing catalog
+domain-implementations.yml                         <- canonical implementation routing catalog
 .openarchitect/
 `-- cascade-state.yml                              <- (optional) governance gates + pinned refs
 architecture/
@@ -48,13 +48,13 @@ inputs/
 
 ## Canonical Artifacts
 
-- `implementation-catalog.yml` (canonical `WORK_ITEM_ID` / `API_ID` routing selector)
+- `domain-implementations.yml` (canonical `WORK_ITEM_ID` / `API_ID` routing selector)
 - `architecture/domains/order/*.yml` (domain design, component specs, data/workflow details)
 - `inputs/workstreams/ws-init-bopis-order/source.yml` (upstream handoff provenance and routing context)
 
 ## Routing
 
-`implementation_id` or `api_id` -> `implementation-catalog.yml` -> `repo_url` + `repo_path` + optional `repo_entrypoint` + optional `repo_git_ref`
+`implementation_id` or `api_id` -> `domain-implementations.yml` -> `repo_url` + `repo_path` + optional `repo_entrypoint` + optional `repo_git_ref`
 
 ## Upstream Inputs
 
